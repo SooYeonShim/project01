@@ -15,6 +15,7 @@ import org.hamcrest.Matchers;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
+import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.restdocs.AutoConfigureRestDocs;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -41,6 +42,8 @@ import static org.springframework.restdocs.headers.HeaderDocumentation.*;
 import static org.springframework.restdocs.payload.PayloadDocumentation.*;
 import me.whiteship.demoinfleanrestapi.RestDocsConfiguration;
 
+
+
 @RunWith(SpringRunner.class)
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -57,6 +60,9 @@ public class EventControllerTests {
 		
 		@MockBean
 		EventRepository eventRepository;
+		
+		@Autowired
+		ModelMapper modelMapper;
 		
 		// api.json api.xml		
 		@SuppressWarnings("deprecation")
@@ -152,9 +158,7 @@ public class EventControllerTests {
 		@Test
 		public void queryEvents() throws Exception{
 			//Given
-			IntStream.range(0, 30).forEach(i->{
-				this.generateEvent(i);
-			});
+			IntStream.range(0, 30).forEach(this::generateEvent);
 			
 			//When
 			this.mockMvc.perform(get("/api/events")
@@ -166,18 +170,90 @@ public class EventControllerTests {
 						.andExpect(status().isOk())
 						.andExpect(jsonPath("page").exists())
 						.andExpect(jsonPath("_embedded.eventList[0].self").exists())
+						.andExpect(jsonPath("_links.self").exists())
+						.andExpect(jsonPath("_links.profile").exists())
+						.andDo(document("query-events"))
 						;
 			
 		
 		}
+		
+		@Test
+		public void getEvent() throws Exception{
+			//Given
+			Event event = this.generateEvent(100);
+			
+			//When & Then
+			this.mockMvc.perform(get("/api/evenets/{id}",event.getId()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("id").exists())
+				.andExpect(jsonPath("name").exists())
+				.andExpect(jsonPath("_links.self").exists())
+				.andExpect(jsonPath("_links.profile").exists())
+				.andDo(document("query-events"))
+			;
+		}
 
-		private void generateEvent(int index) {
+		@Test
+		public void getEvent404() throws Exception{
+			this.mockMvc.perform(get("/api/events/11883"))
+			.andExpect(status().isNotFound())
+			
+			;
+			
+		}
+		
+		@Test
+		public void updateEvent() throws Exception {
+		
+		Event event = this.generateEvent(200);
+		EventDto eventDto = this.modelMapper.map(event, EventDto.class);
+		String eventName = "Updated Event";
+		
+		eventDto.setName(eventName);
+		
+		this.mockMvc.perform(get("/api/events/{id}",event.getId())
+			
+				)
+		.andDo(print())
+		.andExpect(status().isOk())
+		.andExpect(jsonPath("name").value(eventName))
+		.andExpect(jsonPath("_link.self").exists())
+		
+		
+		;
+			
+		}
+		
+		@Test
+		public void updateEvent400() throws Exception {
+		
+		Event event = this.generateEvent(200);
+		EventDto eventDto = new EventDto();
+		String eventName = "Updated Event";
+		
+		eventDto.setName(eventName);
+		
+		this.mockMvc.perform(get("/api/events/{id}",event.getId()))
+		.andDo(print())
+		.andExpect(status().isOk())
+		.andExpect(jsonPath("name").value(eventName))
+		.andExpect(jsonPath("_link.self").exists())
+		
+		
+		;
+			
+		}
+		
+		
+		private Event generateEvent(int index) {
 			
 			Event event = Event.builder()
 					.name("event "+index)
 					.description("test event")
 					.build();
-			this.eventRepository.save(event);
 			
+			
+			return this.eventRepository.save(event);
 		}
 }
